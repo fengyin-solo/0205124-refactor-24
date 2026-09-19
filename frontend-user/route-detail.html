@@ -200,7 +200,7 @@
 <script src="js/common.js"></script>
 <script>
 const routeId = getParam('id');
-let isFavorited = false, routeData = null, lastOrderId = null, payMethod = 'WECHAT';
+let routeData = null, lastOrderId = null, payMethod = 'WECHAT';
 
 if (!routeId) { location.href = 'routes.html'; }
 
@@ -328,44 +328,20 @@ function initRouteMap(spots) {
     map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
 }
 
-async function checkFavorite() {
-    const user = getUser();
-    if (!user) return;
-    const res = await api(`/api/favorite/check?targetType=ROUTE&targetId=${routeId}`);
-    if (res) {
-        isFavorited = true;
-        updateFavBtn();
+/* 收藏与点赞共用一套互动处理，这里只保留按钮渲染差异 */
+const favInteraction = setupToggleInteraction({
+    kind: 'favorite',
+    targetType: 'ROUTE',
+    targetId: routeId,
+    render(active) {
+        const btn = document.getElementById('favBtn');
+        btn.innerHTML = active ? '<i class="fas fa-heart"></i> 已收藏' : '<i class="far fa-heart"></i> 收藏线路';
+        btn.classList.toggle('btn-primary', active);
+        btn.classList.toggle('btn-outline', !active);
     }
-}
+});
 
-function updateFavBtn() {
-    const btn = document.getElementById('favBtn');
-    if (isFavorited) {
-        btn.innerHTML = '<i class="fas fa-heart"></i> 已收藏';
-        btn.classList.remove('btn-outline');
-        btn.classList.add('btn-primary');
-    } else {
-        btn.innerHTML = '<i class="far fa-heart"></i> 收藏线路';
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-outline');
-    }
-}
-
-async function toggleFavorite() {
-    if (!requireLogin()) return;
-    if (isFavorited) {
-        var res = await api(`/api/favorite/remove?targetType=ROUTE&targetId=${routeId}`);
-        if (res === null) return;
-        isFavorited = false;
-        showToast('已取消收藏');
-    } else {
-        var res = await api(`/api/favorite/add?targetType=ROUTE&targetId=${routeId}`);
-        if (res === null) return;
-        isFavorited = true;
-        showToast('已收藏');
-    }
-    updateFavBtn();
-}
+function toggleFavorite() { favInteraction.toggle(); }
 
 /* ========== 预订 & 支付 ========== */
 function openBookModal() {
@@ -424,7 +400,6 @@ function printRoute() {
 
 loadDetail();
 loadRouteSpots();
-checkFavorite();
 </script>
 </body>
 </html>

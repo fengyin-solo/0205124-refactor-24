@@ -80,32 +80,19 @@ function renderSidebar() {
 function switchFavTab(type) {
     currentType = type;
     document.querySelectorAll('.fav-tab').forEach(t => t.classList.remove('active'));
-    const idx = { SPOT: 0, ROUTE: 1, CULTURE: 2 }[type] || 0;
+    const idx = Math.max(0, Object.keys(INTERACTION_TARGETS).indexOf(type));
     document.querySelectorAll('.fav-tab')[idx].classList.add('active');
     loadFavorites();
 }
 
-function getDetailApi(type) {
-    if (type === 'SPOT') return '/api/spot/detail?id=';
-    if (type === 'ROUTE') return '/api/route/detail?id=';
-    return '/api/culture/detail?id=';
-}
-
-function getDetailPage(type) {
-    if (type === 'SPOT') return 'spot-detail.html?id=';
-    if (type === 'ROUTE') return 'route-detail.html?id=';
-    return 'culture-detail.html?id=';
-}
-
 function emptyFav() {
-    const icons = { SPOT: 'fa-mountain', ROUTE: 'fa-route', CULTURE: 'fa-book-open' };
-    const labels = { SPOT: '景点', ROUTE: '线路', CULTURE: '红色文化' };
+    const target = INTERACTION_TARGETS[currentType] || {};
     return '<div class="empty-illus">' +
         '<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">' +
         '<rect width="80" height="80" rx="40" fill="#FFF0F0"/>' +
         '<path d="M40 55 C40 55 18 42 18 29a12 12 0 0 1 22-6.7A12 12 0 0 1 62 29c0 13-22 26-22 26z" fill="#C41A1A" fill-opacity=".15" stroke="#C41A1A" stroke-width="2" stroke-linejoin="round"/>' +
         '</svg>' +
-        '<p>暂无收藏的' + (labels[currentType] || '') + '</p>' +
+        '<p>暂无收藏的' + (target.label || '') + '</p>' +
         '<span>浏览<a href="spots.html" style="color:var(--red);margin:0 4px">景点</a>并点击收藏按钮添加</span>' +
     '</div>';
 }
@@ -116,8 +103,9 @@ async function loadFavorites() {
     const favs = await api('/api/favorite/myList?targetType=' + currentType);
     if (!favs || favs === true || !favs.length) { el.innerHTML = emptyFav(); return; }
 
+    const target = INTERACTION_TARGETS[currentType];
     const details = await Promise.all(favs.map(async fav => {
-        const detail = await api(getDetailApi(currentType) + (fav.targetId || fav.id));
+        const detail = await api(target.detailApi + (fav.targetId || fav.id));
         return { fav, detail };
     }));
     const valid = details.filter(d => d.detail);
@@ -136,7 +124,7 @@ async function loadFavorites() {
             '<div class="fav-item-img">' + (imgSrc ? '<img src="' + imgSrc + '" onerror="imgError(this)" alt="' + name + '">' : '') + '</div>' +
             '<div class="fav-item-body">' +
                 '<div>' +
-                    '<div class="fav-item-title"><a href="' + getDetailPage(currentType) + item.id + '">' + name + '</a></div>' +
+                    '<div class="fav-item-title"><a href="' + target.detailPage + item.id + '">' + name + '</a></div>' +
                     '<div class="fav-item-desc">' + desc + '</div>' +
                 '</div>' +
                 '<div class="fav-item-footer">' +

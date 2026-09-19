@@ -5,13 +5,17 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.redtourism.entity.*;
 import com.redtourism.mapper.*;
+import com.redtourism.service.InteractionKind;
 import com.redtourism.service.InteractionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import javax.annotation.PostConstruct;
 import java.util.Date;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class InteractionServiceImpl implements InteractionService {
@@ -24,6 +28,26 @@ public class InteractionServiceImpl implements InteractionService {
     private LikeRecordMapper likeRecordMapper;
     @Autowired
     private UserMapper userMapper;
+
+    /** 开关型互动的共用处理入口：各互动类型只登记自己的表与实体 */
+    private final Map<InteractionKind, ToggleInteractionSupport<? extends UserInteraction>> toggleSupports =
+            new EnumMap<>(InteractionKind.class);
+
+    @PostConstruct
+    void initToggleSupports() {
+        toggleSupports.put(InteractionKind.FAVORITE, new ToggleInteractionSupport<>(favoriteMapper, Favorite::new));
+        toggleSupports.put(InteractionKind.LIKE, new ToggleInteractionSupport<>(likeRecordMapper, LikeRecord::new));
+    }
+
+    private ToggleInteractionSupport<? extends UserInteraction> toggle(InteractionKind kind) {
+        ToggleInteractionSupport<? extends UserInteraction> support = toggleSupports.get(kind);
+        if (support == null) {
+            throw new IllegalArgumentException("不支持的互动类型: " + kind);
+        }
+        return support;
+    }
+
+    /* ========== 留言 ========== */
 
     @Override
     public boolean addComment(Comment comment) {
@@ -41,13 +65,7 @@ public class InteractionServiceImpl implements InteractionService {
         }
         wrapper.orderByDesc(Comment::getCreateTime);
         IPage<Comment> result = commentMapper.selectPage(new Page<>(page, size), wrapper);
-        result.getRecords().forEach(c -> {
-            User user = userMapper.selectById(c.getUserId());
-            if (user != null) {
-                c.setUsername(user.getNickname() != null ? user.getNickname() : user.getUsername());
-                c.setUserAvatar(user.getAvatar());
-            }
-        });
+        fillUserInfo(result.getRecords());
         return result;
     }
 
@@ -59,14 +77,19 @@ public class InteractionServiceImpl implements InteractionService {
         }
         wrapper.orderByDesc(Comment::getCreateTime);
         IPage<Comment> result = commentMapper.selectPage(new Page<>(page, size), wrapper);
-        result.getRecords().forEach(c -> {
+        fillUserInfo(result.getRecords());
+        return result;
+    }
+
+    /** 为留言列表填充用户昵称与头像 */
+    private void fillUserInfo(List<Comment> comments) {
+        comments.forEach(c -> {
             User user = userMapper.selectById(c.getUserId());
             if (user != null) {
                 c.setUsername(user.getNickname() != null ? user.getNickname() : user.getUsername());
                 c.setUserAvatar(user.getAvatar());
             }
         });
-        return result;
     }
 
     @Override
@@ -86,86 +109,47 @@ public class InteractionServiceImpl implements InteractionService {
     }
 
     @Override
-    public boolean deleteComment(Long id) {
+    public boolean deleteComment(Long id, Long operatorId, boolean admin) {
+        if (!admin) {
+            Comment comment = commentMapper.selectById(id);
+            if (comment == null) {
+                throw new RuntimeException("留言不存在");
+            }
+            if (comment.getUserId() == null || !comment.getUserId().equals(operatorId)) {
+                throw new RuntimeException("只能删除自己的留言");
+            }
+        }
         return commentMapper.deleteById(id) > 0;
     }
 
+    /* ========== 开关型互动（收藏/点赞） ========== */
+
     @Override
-    public boolean addFavorite(Long userId, String targetType, Long targetId) {
-        if (isFavorited(userId, targetType, targetId)) {
-            throw new RuntimeException("已收藏");
+    public boolean addInteraction(InteractionKind kind, Long userId, String targetType, Long targetId) {
+        if (hasInteraction(kind, userId, targetType, targetId)) {
+            throw new RuntimeException(kind.getDuplicateMessage());
         }
-        Favorite fav = new Favorite();
-        fav.setUserId(userId);
-        fav.setTargetType(targetType);
-        fav.setTargetId(targetId);
-        return favoriteMapper.insert(fav) > 0;
+        return toggle(kind).insert(userId, targetType, targetId) > 0;
     }
 
     @Override
-    public boolean removeFavorite(Long userId, String targetType, Long targetId) {
-        LambdaQueryWrapper<Favorite> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Favorite::getUserId, userId)
-                .eq(Favorite::getTargetType, targetType)
-                .eq(Favorite::getTargetId, targetId);
-        return favoriteMapper.delete(wrapper) > 0;
+    public boolean removeInteraction(InteractionKind kind, Long userId, String targetType, Long targetId) {
+        return toggle(kind).delete(userId, targetType, targetId) > 0;
     }
 
     @Override
-    public boolean isFavorited(Long userId, String targetType, Long targetId) {
-        LambdaQueryWrapper<Favorite> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Favorite::getUserId, userId)
-                .eq(Favorite::getTargetType, targetType)
-                .eq(Favorite::getTargetId, targetId);
-        return favoriteMapper.selectCount(wrapper) > 0;
+    public boolean hasInteraction(InteractionKind kind, Long userId, String targetType, Long targetId) {
+        return toggle(kind).exists(userId, targetType, targetId);
     }
 
     @Override
-    public List<Favorite> listUserFavorites(Long userId, String targetType) {
-        LambdaQueryWrapper<Favorite> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Favorite::getUserId, userId);
-        if (StringUtils.hasText(targetType)) {
-            wrapper.eq(Favorite::getTargetType, targetType);
-        }
-        wrapper.orderByDesc(Favorite::getCreateTime);
-        return favoriteMapper.selectList(wrapper);
+    public long countInteractions(InteractionKind kind, String targetType, Long targetId) {
+        return toggle(kind).count(targetType, targetId);
     }
 
     @Override
-    public boolean addLike(Long userId, String targetType, Long targetId) {
-        if (isLiked(userId, targetType, targetId)) {
-            throw new RuntimeException("已点赞");
-        }
-        LikeRecord like = new LikeRecord();
-        like.setUserId(userId);
-        like.setTargetType(targetType);
-        like.setTargetId(targetId);
-        return likeRecordMapper.insert(like) > 0;
-    }
-
-    @Override
-    public boolean removeLike(Long userId, String targetType, Long targetId) {
-        LambdaQueryWrapper<LikeRecord> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(LikeRecord::getUserId, userId)
-                .eq(LikeRecord::getTargetType, targetType)
-                .eq(LikeRecord::getTargetId, targetId);
-        return likeRecordMapper.delete(wrapper) > 0;
-    }
-
-    @Override
-    public boolean isLiked(Long userId, String targetType, Long targetId) {
-        LambdaQueryWrapper<LikeRecord> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(LikeRecord::getUserId, userId)
-                .eq(LikeRecord::getTargetType, targetType)
-                .eq(LikeRecord::getTargetId, targetId);
-        return likeRecordMapper.selectCount(wrapper) > 0;
-    }
-
-    @Override
-    public long countLikes(String targetType, Long targetId) {
-        LambdaQueryWrapper<LikeRecord> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(LikeRecord::getTargetType, targetType)
-                .eq(LikeRecord::getTargetId, targetId);
-        return likeRecordMapper.selectCount(wrapper);
+    @SuppressWarnings("unchecked")
+    public <T extends UserInteraction> List<T> listUserInteractions(InteractionKind kind, Long userId, String targetType) {
+        return (List<T>) toggle(kind).listByUser(userId, targetType);
     }
 }

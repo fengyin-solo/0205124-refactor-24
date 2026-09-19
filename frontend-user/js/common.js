@@ -173,6 +173,127 @@ function formatDate(d) {
     return typeof d === 'string' ? d.substring(0, 16) : '';
 }
 
+/* ========== 互动（收藏/点赞/留言） ========== */
+/**
+ * 可互动内容类型配置。
+ * 新增一种可互动的内容时只需在此登记，详情页、列表页与个人中心随之生效。
+ */
+const INTERACTION_TARGETS = {
+    SPOT: { detailApi: '/api/spot/detail?id=', detailPage: 'spot-detail.html?id=', icon: 'fa-mountain', label: '景点' },
+    ROUTE: { detailApi: '/api/route/detail?id=', detailPage: 'route-detail.html?id=', icon: 'fa-route', label: '线路' },
+    CULTURE: { detailApi: '/api/culture/detail?id=', detailPage: 'culture-detail.html?id=', icon: 'fa-book-open', label: '红色文化' }
+};
+
+/** 收藏/点赞的接口路径与提示语差异配置 */
+const TOGGLE_INTERACTION_TYPES = {
+    favorite: { apiBase: '/api/favorite', addToast: '已收藏', removeToast: '已取消收藏' },
+    like: { apiBase: '/api/like', addToast: '已点赞', removeToast: '已取消点赞' }
+};
+
+/**
+ * 收藏/点赞共用的状态处理：负责"是否已操作"查询与新增/取消切换，
+ * 页面只通过 render 回调提供自己的按钮渲染差异。
+ * opts: { kind, targetType, targetId, render(active), onToggled(active) }
+ */
+function setupToggleInteraction(opts) {
+    const conf = TOGGLE_INTERACTION_TYPES[opts.kind];
+    const query = 'targetType=' + opts.targetType + '&targetId=' + opts.targetId;
+    const state = { active: false };
+
+    async function check() {
+        if (!getUser()) return;
+        const res = await api(conf.apiBase + '/check?' + query);
+        if (res) {
+            state.active = true;
+            opts.render(true);
+        }
+    }
+
+    async function toggle() {
+        if (!requireLogin()) return;
+        const res = await api(conf.apiBase + (state.active ? '/remove?' : '/add?') + query);
+        if (res === null) return;
+        state.active = !state.active;
+        showToast(state.active ? conf.addToast : conf.removeToast);
+        opts.render(state.active);
+        if (opts.onToggled) opts.onToggled(state.active);
+    }
+
+    check();
+    return { toggle: toggle, state: state };
+}
+
+/**
+ * 留言区共用处理：分页加载（含留言回复展示）与提交。
+ * 各页面只保留自己的差异（空态文案、匿名兜底、提示语等）。
+ * opts: {
+ *   targetType, targetId, listEl, paginationEl, pageHandler,
+ *   emptyHtml, failHtml, nameFallback, avatarFallback, avatarUpper,
+ *   textareaEl, ratingOf, emptyToast, successToast, redirectOnNoLogin, onSubmitted
+ * }
+ */
+function createCommentSection(opts) {
+    const size = 10;
+    let currentPage = 1;
+
+    function renderItem(c) {
+        const avatarText = (c.nickname || c.username || opts.avatarFallback).charAt(0);
+        const avatar = c.userAvatar
+            ? '<img src="' + API + c.userAvatar + '" alt="avatar">'
+            : (opts.avatarUpper ? avatarText.toUpperCase() : avatarText);
+        return '<div class="comment-item">' +
+            '<div class="comment-avatar">' + avatar + '</div>' +
+            '<div class="comment-body">' +
+                '<span class="name">' + (c.nickname || c.username || opts.nameFallback) + '</span>' +
+                '<span class="time">' + formatDate(c.createTime || c.createdAt) + '</span>' +
+                '<div class="rating">' + renderStars(c.rating || 0) + '</div>' +
+                '<div class="text">' + (c.content || '') + '</div>' +
+                (c.reply ? '<div class="comment-reply"><strong>商家回复：</strong>' + c.reply + '</div>' : '') +
+            '</div>' +
+        '</div>';
+    }
+
+    async function load(page) {
+        currentPage = page;
+        const data = await api('/api/comment/list?targetType=' + opts.targetType + '&targetId=' + opts.targetId + '&page=' + page + '&size=' + size);
+        const listEl = document.getElementById(opts.listEl);
+        const paginationEl = document.getElementById(opts.paginationEl);
+        if (!data) { listEl.innerHTML = opts.failHtml || opts.emptyHtml; return; }
+        const list = data.records || data.list || data;
+        const total = data.total || (Array.isArray(data) ? data.length : list.length);
+        if (!list || list.length === 0) {
+            listEl.innerHTML = opts.emptyHtml;
+            paginationEl.innerHTML = '';
+            return;
+        }
+        listEl.innerHTML = list.map(renderItem).join('');
+        renderPagination(paginationEl, currentPage, total, size, opts.pageHandler);
+    }
+
+    async function submit() {
+        if (opts.redirectOnNoLogin) {
+            if (!requireLogin()) return;
+        } else if (!getUser()) {
+            showToast('请先登录', 'error');
+            return;
+        }
+        const textarea = document.getElementById(opts.textareaEl);
+        const content = textarea.value.trim();
+        if (!content) { showToast(opts.emptyToast, 'warn'); return; }
+        const rating = opts.ratingOf ? opts.ratingOf() : 5;
+        const res = await api('/api/comment/add?targetType=' + opts.targetType + '&targetId=' + opts.targetId + '&content=' + encodeURIComponent(content) + '&rating=' + rating);
+        if (res !== null) {
+            showToast(opts.successToast);
+            textarea.value = '';
+            if (opts.onSubmitted) opts.onSubmitted();
+            load(1);
+        }
+    }
+
+    load(1);
+    return { load: load, submit: submit };
+}
+
 /* ========== Header Render ========== */
 function renderHeader() {
     const user = getUser();

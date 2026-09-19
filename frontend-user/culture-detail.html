@@ -96,8 +96,6 @@
 <script src="js/common.js"></script>
 <script>
 const cultureId = getParam('id');
-let isLiked = false;
-let isFavorited = false;
 
 if (!cultureId) { location.href = 'culture.html'; }
 
@@ -137,84 +135,34 @@ async function loadLikeCount() {
     }
 }
 
-async function checkLike() {
-    const user = getUser();
-    if (!user) return;
-    const res = await api(`/api/like/check?targetType=CULTURE&targetId=${cultureId}`);
-    if (res) {
-        isLiked = true;
-        updateLikeBtn();
-    }
-}
+/* 点赞与收藏共用一套互动处理，这里只保留各自的按钮渲染差异 */
+const likeInteraction = setupToggleInteraction({
+    kind: 'like',
+    targetType: 'CULTURE',
+    targetId: cultureId,
+    render(active) {
+        const btn = document.getElementById('likeBtn');
+        btn.classList.toggle('active', active);
+        btn.querySelector('i').className = (active ? 'fas' : 'far') + ' fa-thumbs-up';
+        btn.querySelector('span:not(.count)').textContent = active ? '已赞' : '点赞';
+    },
+    onToggled() { loadLikeCount(); }
+});
 
-function updateLikeBtn() {
-    const btn = document.getElementById('likeBtn');
-    if (isLiked) {
-        btn.classList.add('active');
-        btn.querySelector('i').className = 'fas fa-thumbs-up';
-        btn.querySelector('span:not(.count)').textContent = '已赞';
-    } else {
-        btn.classList.remove('active');
-        btn.querySelector('i').className = 'far fa-thumbs-up';
-        btn.querySelector('span:not(.count)').textContent = '点赞';
+const favInteraction = setupToggleInteraction({
+    kind: 'favorite',
+    targetType: 'CULTURE',
+    targetId: cultureId,
+    render(active) {
+        const btn = document.getElementById('favBtn');
+        btn.classList.toggle('active', active);
+        btn.querySelector('i').className = (active ? 'fas' : 'far') + ' fa-heart';
+        btn.querySelector('span').textContent = active ? '已收藏' : '收藏';
     }
-}
+});
 
-async function toggleLike() {
-    if (!requireLogin()) return;
-    if (isLiked) {
-        var res = await api(`/api/like/remove?targetType=CULTURE&targetId=${cultureId}`);
-        if (res === null) return;
-        isLiked = false;
-        showToast('已取消点赞');
-    } else {
-        var res = await api(`/api/like/add?targetType=CULTURE&targetId=${cultureId}`);
-        if (res === null) return;
-        isLiked = true;
-        showToast('已点赞');
-    }
-    updateLikeBtn();
-    loadLikeCount();
-}
-
-async function checkFavorite() {
-    const user = getUser();
-    if (!user) return;
-    const res = await api(`/api/favorite/check?targetType=CULTURE&targetId=${cultureId}`);
-    if (res) {
-        isFavorited = true;
-        updateFavBtn();
-    }
-}
-
-function updateFavBtn() {
-    const btn = document.getElementById('favBtn');
-    if (isFavorited) {
-        btn.classList.add('active');
-        btn.querySelector('i').className = 'fas fa-heart';
-        btn.querySelector('span').textContent = '已收藏';
-    } else {
-        btn.classList.remove('active');
-        btn.querySelector('i').className = 'far fa-heart';
-        btn.querySelector('span').textContent = '收藏';
-    }
-}
-
-async function toggleFavorite() {
-    if (!requireLogin()) return;
-    if (isFavorited) {
-        var res = await api(`/api/favorite/remove?targetType=CULTURE&targetId=${cultureId}`);
-        if (res === null) return;
-        isFavorited = false;
-        showToast('已取消收藏');
-    } else {
-        var res = await api(`/api/favorite/add?targetType=CULTURE&targetId=${cultureId}`);
-        if (res === null) return;
-        isFavorited = true;
-        showToast('已收藏');
-    }
-    updateFavBtn();
-}
+function toggleLike() { likeInteraction.toggle(); }
+function toggleFavorite() { favInteraction.toggle(); }
 
 function sharePage() {
     if (navigator.clipboard) {
@@ -248,8 +196,6 @@ async function loadRelated() {
 
 loadDetail();
 loadLikeCount();
-checkLike();
-checkFavorite();
 loadRelated();
 </script>
 </body>

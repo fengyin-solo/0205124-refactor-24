@@ -1,53 +1,31 @@
 package com.redtourism.controller;
 
-import com.redtourism.common.Constants;
 import com.redtourism.common.Result;
-import com.redtourism.entity.User;
-import com.redtourism.service.InteractionService;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.redtourism.service.InteractionKind;
 import org.springframework.web.bind.annotation.*;
-
-import javax.servlet.http.HttpSession;
 
 @RestController
 @RequestMapping("/api/like")
-public class LikeController {
+public class LikeController extends AbstractToggleInteractionController {
 
-    @Autowired
-    private InteractionService interactionService;
-
-    @GetMapping("/add")
-    public Result<String> add(@RequestParam String targetType,
-                               @RequestParam Long targetId,
-                               HttpSession session) {
-        User user = (User) session.getAttribute(Constants.SESSION_USER);
-        if (user == null) return Result.error(401, "请先登录");
-        interactionService.addLike(user.getId(), targetType, targetId);
-        return Result.success("点赞成功", null);
+    @Override
+    protected InteractionKind kind() {
+        return InteractionKind.LIKE;
     }
 
-    @GetMapping("/remove")
-    public Result<String> remove(@RequestParam String targetType,
-                                  @RequestParam Long targetId,
-                                  HttpSession session) {
-        User user = (User) session.getAttribute(Constants.SESSION_USER);
-        if (user == null) return Result.error(401, "请先登录");
-        interactionService.removeLike(user.getId(), targetType, targetId);
-        return Result.success("取消点赞", null);
+    @Override
+    protected String addSuccessMessage() {
+        return "点赞成功";
     }
 
-    @GetMapping("/check")
-    public Result<Boolean> check(@RequestParam String targetType,
-                                  @RequestParam Long targetId,
-                                  HttpSession session) {
-        User user = (User) session.getAttribute(Constants.SESSION_USER);
-        if (user == null) return Result.success(false);
-        return Result.success(interactionService.isLiked(user.getId(), targetType, targetId));
+    @Override
+    protected String removeSuccessMessage() {
+        return "取消点赞";
     }
 
     @GetMapping("/count")
     public Result<Long> count(@RequestParam String targetType,
                                @RequestParam Long targetId) {
-        return Result.success(interactionService.countLikes(targetType, targetId));
+        return Result.success(interactionService.countInteractions(kind(), targetType, targetId));
     }
 }

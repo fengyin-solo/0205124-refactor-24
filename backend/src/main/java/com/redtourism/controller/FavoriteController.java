@@ -4,8 +4,7 @@ import com.redtourism.common.Constants;
 import com.redtourism.common.Result;
 import com.redtourism.entity.Favorite;
 import com.redtourism.entity.User;
-import com.redtourism.service.InteractionService;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.redtourism.service.InteractionKind;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpSession;
@@ -13,38 +12,21 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/favorite")
-public class FavoriteController {
+public class FavoriteController extends AbstractToggleInteractionController {
 
-    @Autowired
-    private InteractionService interactionService;
-
-    @GetMapping("/add")
-    public Result<String> add(@RequestParam String targetType,
-                               @RequestParam Long targetId,
-                               HttpSession session) {
-        User user = (User) session.getAttribute(Constants.SESSION_USER);
-        if (user == null) return Result.error(401, "请先登录");
-        interactionService.addFavorite(user.getId(), targetType, targetId);
-        return Result.success("收藏成功", null);
+    @Override
+    protected InteractionKind kind() {
+        return InteractionKind.FAVORITE;
     }
 
-    @GetMapping("/remove")
-    public Result<String> remove(@RequestParam String targetType,
-                                  @RequestParam Long targetId,
-                                  HttpSession session) {
-        User user = (User) session.getAttribute(Constants.SESSION_USER);
-        if (user == null) return Result.error(401, "请先登录");
-        interactionService.removeFavorite(user.getId(), targetType, targetId);
-        return Result.success("取消收藏", null);
+    @Override
+    protected String addSuccessMessage() {
+        return "收藏成功";
     }
 
-    @GetMapping("/check")
-    public Result<Boolean> check(@RequestParam String targetType,
-                                  @RequestParam Long targetId,
-                                  HttpSession session) {
-        User user = (User) session.getAttribute(Constants.SESSION_USER);
-        if (user == null) return Result.success(false);
-        return Result.success(interactionService.isFavorited(user.getId(), targetType, targetId));
+    @Override
+    protected String removeSuccessMessage() {
+        return "取消收藏";
     }
 
     @GetMapping("/myList")
@@ -52,6 +34,7 @@ public class FavoriteController {
                                           HttpSession session) {
         User user = (User) session.getAttribute(Constants.SESSION_USER);
         if (user == null) return Result.error(401, "请先登录");
-        return Result.success(interactionService.listUserFavorites(user.getId(), targetType));
+        List<Favorite> favorites = interactionService.listUserInteractions(kind(), user.getId(), targetType);
+        return Result.success(favorites);
     }
 }

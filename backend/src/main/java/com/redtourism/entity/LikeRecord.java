@@ -7,7 +7,7 @@ import java.util.Date;
 
 @Data
 @TableName("like_record")
-public class LikeRecord implements Serializable {
+public class LikeRecord implements Serializable, UserInteraction {
     private static final long serialVersionUID = 1L;
 
     @TableId(type = IdType.AUTO)

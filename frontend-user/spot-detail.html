@@ -277,9 +277,7 @@
 <script src="js/common.js"></script>
 <script>
 const spotId = getParam('id');
-let isFavorited = false;
 let selectedRating = 5;
-let commentPage = 1;
 let spotData = null, lastOrderId = null, payMethod = 'WECHAT';
 
 if (!spotId) { location.href = 'spots.html'; }
@@ -417,44 +415,20 @@ async function loadGallery() {
     gallery.innerHTML = images.map(img => `<img src="${API + (img.url || img.imageUrl || img)}" alt="景点图片" onerror="imgError(this)">`).join('');
 }
 
-async function checkFavorite() {
-    const user = getUser();
-    if (!user) return;
-    const res = await api(`/api/favorite/check?targetType=SPOT&targetId=${spotId}`);
-    if (res) {
-        isFavorited = true;
-        updateFavBtn();
+/* 收藏与点赞共用一套互动处理，这里只保留按钮渲染差异 */
+const favInteraction = setupToggleInteraction({
+    kind: 'favorite',
+    targetType: 'SPOT',
+    targetId: spotId,
+    render(active) {
+        const btn = document.getElementById('favBtn');
+        btn.innerHTML = active ? '<i class="fas fa-heart"></i> 已收藏' : '<i class="far fa-heart"></i> 收藏';
+        btn.classList.toggle('btn-primary', active);
+        btn.classList.toggle('btn-outline', !active);
     }
-}
+});
 
-function updateFavBtn() {
-    const btn = document.getElementById('favBtn');
-    if (isFavorited) {
-        btn.innerHTML = '<i class="fas fa-heart"></i> 已收藏';
-        btn.classList.remove('btn-outline');
-        btn.classList.add('btn-primary');
-    } else {
-        btn.innerHTML = '<i class="far fa-heart"></i> 收藏';
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-outline');
-    }
-}
-
-async function toggleFavorite() {
-    if (!requireLogin()) return;
-    if (isFavorited) {
-        var res = await api(`/api/favorite/remove?targetType=SPOT&targetId=${spotId}`);
-        if (res === null) return;
-        isFavorited = false;
-        showToast('已取消收藏');
-    } else {
-        var res = await api(`/api/favorite/add?targetType=SPOT&targetId=${spotId}`);
-        if (res === null) return;
-        isFavorited = true;
-        showToast('已收藏');
-    }
-    updateFavBtn();
-}
+function toggleFavorite() { favInteraction.toggle(); }
 
 async function loadRelated() {
     const list = await api(`/api/spot/related?id=${spotId}`);
@@ -473,56 +447,34 @@ async function loadRelated() {
     `).join('');
 }
 
-async function loadComments(page) {
-    commentPage = page;
-    const res = await api(`/api/comment/list?targetType=SPOT&targetId=${spotId}&page=${page}&size=10`);
-    const container = document.getElementById('commentList');
-    if (!res) { container.innerHTML = '<div class="empty"><p>加载评论失败</p></div>'; return; }
+/* 留言区共用一套处理，这里只保留展示与提示语差异 */
+const commentSection = createCommentSection({
+    targetType: 'SPOT',
+    targetId: spotId,
+    listEl: 'commentList',
+    paginationEl: 'commentPagination',
+    pageHandler: 'loadComments',
+    emptyHtml: '<div class="empty"><i class="fas fa-comment-slash"></i><p>暂无评论，来做第一个评价的人吧</p></div>',
+    failHtml: '<div class="empty"><p>加载评论失败</p></div>',
+    nameFallback: '匿名用户',
+    avatarFallback: '游',
+    avatarUpper: false,
+    textareaEl: 'commentContent',
+    ratingOf() { return selectedRating; },
+    emptyToast: '请输入评论内容',
+    successToast: '评论发表成功',
+    redirectOnNoLogin: true,
+    onSubmitted() { selectStar(5); }
+});
 
-    const list = res.records || res.list || res;
-    const total = res.total || (Array.isArray(res) ? res.length : 0);
-
-    if (!list || list.length === 0) {
-        container.innerHTML = '<div class="empty"><i class="fas fa-comment-slash"></i><p>暂无评论，来做第一个评价的人吧</p></div>';
-        document.getElementById('commentPagination').innerHTML = '';
-        return;
-    }
-
-    container.innerHTML = list.map(c => `
-        <div class="comment-item">
-            <div class="comment-avatar">${c.userAvatar ? `<img src="${API + c.userAvatar}" alt="avatar">` : (c.nickname || c.username || '游').charAt(0)}</div>
-            <div class="comment-body">
-                <span class="name">${c.nickname || c.username || '匿名用户'}</span>
-                <span class="time">${formatDate(c.createTime)}</span>
-                <div class="rating">${renderStars(c.rating || 0)}</div>
-                <div class="text">${c.content || ''}</div>
-                ${c.reply ? `<div class="comment-reply"><strong>商家回复：</strong>${c.reply}</div>` : ''}
-            </div>
-        </div>
-    `).join('');
-
-    renderPagination(document.getElementById('commentPagination'), commentPage, total, 10, 'loadComments');
-}
+function loadComments(page) { commentSection.load(page); }
+function submitComment() { commentSection.submit(); }
 
 function selectStar(v) {
     selectedRating = v;
     document.querySelectorAll('.rating-select .star').forEach(s => {
         s.classList.toggle('active', parseInt(s.dataset.v) <= v);
     });
-}
-
-async function submitComment() {
-    if (!requireLogin()) return;
-    const content = document.getElementById('commentContent').value.trim();
-    if (!content) { showToast('请输入评论内容', 'warn'); return; }
-
-    const res = await api(`/api/comment/add?targetType=SPOT&targetId=${spotId}&content=${encodeURIComponent(content)}&rating=${selectedRating}`);
-    if (res !== null) {
-        showToast('评论发表成功');
-        document.getElementById('commentContent').value = '';
-        selectStar(5);
-        loadComments(1);
-    }
 }
 
 function initSpotMap(lat, lng, name) {
@@ -560,9 +512,7 @@ async function submitSuggestion() {
 selectStar(5);
 loadDetail();
 loadGallery();
-checkFavorite();
 loadRelated();
-loadComments(1);
 </script>
 </body>
 </html>
