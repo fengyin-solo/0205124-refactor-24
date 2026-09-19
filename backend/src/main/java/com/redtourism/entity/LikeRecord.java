@@ -1,13 +1,14 @@
 package com.redtourism.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.redtourism.interaction.UserInteractionRecord;
 import lombok.Data;
 import java.io.Serializable;
 import java.util.Date;
 
 @Data
 @TableName("like_record")
-public class LikeRecord implements Serializable {
+public class LikeRecord implements UserInteractionRecord, Serializable {
     private static final long serialVersionUID = 1L;
 
     @TableId(type = IdType.AUTO)

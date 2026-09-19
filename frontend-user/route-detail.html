@@ -200,7 +200,20 @@
 <script src="js/common.js"></script>
 <script>
 const routeId = getParam('id');
-let isFavorited = false, routeData = null, lastOrderId = null, payMethod = 'WECHAT';
+// 收藏按钮的状态查询与新增/取消统一走 bindInteractionToggle，本页只保留按钮样式差异
+const favoriteToggle = bindInteractionToggle({
+    kind: 'favorite',
+    targetType: 'ROUTE',
+    targetId: routeId,
+    buttonId: 'favBtn',
+    render: (active, btn) => {
+        btn.innerHTML = active ? '<i class="fas fa-heart"></i> 已收藏' : '<i class="far fa-heart"></i> 收藏线路';
+        btn.classList.toggle('btn-outline', !active);
+        btn.classList.toggle('btn-primary', active);
+    }
+});
+function toggleFavorite() { favoriteToggle.toggle(); }
+let routeData = null, lastOrderId = null, payMethod = 'WECHAT';
 
 if (!routeId) { location.href = 'routes.html'; }
 
@@ -328,45 +341,6 @@ function initRouteMap(spots) {
     map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
 }
 
-async function checkFavorite() {
-    const user = getUser();
-    if (!user) return;
-    const res = await api(`/api/favorite/check?targetType=ROUTE&targetId=${routeId}`);
-    if (res) {
-        isFavorited = true;
-        updateFavBtn();
-    }
-}
-
-function updateFavBtn() {
-    const btn = document.getElementById('favBtn');
-    if (isFavorited) {
-        btn.innerHTML = '<i class="fas fa-heart"></i> 已收藏';
-        btn.classList.remove('btn-outline');
-        btn.classList.add('btn-primary');
-    } else {
-        btn.innerHTML = '<i class="far fa-heart"></i> 收藏线路';
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-outline');
-    }
-}
-
-async function toggleFavorite() {
-    if (!requireLogin()) return;
-    if (isFavorited) {
-        var res = await api(`/api/favorite/remove?targetType=ROUTE&targetId=${routeId}`);
-        if (res === null) return;
-        isFavorited = false;
-        showToast('已取消收藏');
-    } else {
-        var res = await api(`/api/favorite/add?targetType=ROUTE&targetId=${routeId}`);
-        if (res === null) return;
-        isFavorited = true;
-        showToast('已收藏');
-    }
-    updateFavBtn();
-}
-
 /* ========== 预订 & 支付 ========== */
 function openBookModal() {
     if (!getUser()) { showToast('请先登录', 'error'); setTimeout(() => location.href = 'login.html', 1000); return; }
@@ -424,7 +398,6 @@ function printRoute() {
 
 loadDetail();
 loadRouteSpots();
-checkFavorite();
 </script>
 </body>
 </html>

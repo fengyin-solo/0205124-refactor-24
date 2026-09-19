@@ -85,27 +85,27 @@ function switchFavTab(type) {
     loadFavorites();
 }
 
+// 内容类型的差异统一取自 common.js 的 TARGET_TYPES 登记，新增类型无需再改本页
+function targetConfig(type) {
+    return TARGET_TYPES[type] || TARGET_TYPES.CULTURE;
+}
+
 function getDetailApi(type) {
-    if (type === 'SPOT') return '/api/spot/detail?id=';
-    if (type === 'ROUTE') return '/api/route/detail?id=';
-    return '/api/culture/detail?id=';
+    return targetConfig(type).detailApi;
 }
 
 function getDetailPage(type) {
-    if (type === 'SPOT') return 'spot-detail.html?id=';
-    if (type === 'ROUTE') return 'route-detail.html?id=';
-    return 'culture-detail.html?id=';
+    return targetConfig(type).detailPage;
 }
 
 function emptyFav() {
-    const icons = { SPOT: 'fa-mountain', ROUTE: 'fa-route', CULTURE: 'fa-book-open' };
-    const labels = { SPOT: '景点', ROUTE: '线路', CULTURE: '红色文化' };
+    const cfg = targetConfig(currentType);
     return '<div class="empty-illus">' +
         '<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">' +
         '<rect width="80" height="80" rx="40" fill="#FFF0F0"/>' +
         '<path d="M40 55 C40 55 18 42 18 29a12 12 0 0 1 22-6.7A12 12 0 0 1 62 29c0 13-22 26-22 26z" fill="#C41A1A" fill-opacity=".15" stroke="#C41A1A" stroke-width="2" stroke-linejoin="round"/>' +
         '</svg>' +
-        '<p>暂无收藏的' + (labels[currentType] || '') + '</p>' +
+        '<p>暂无收藏的' + cfg.label + '</p>' +
         '<span>浏览<a href="spots.html" style="color:var(--red);margin:0 4px">景点</a>并点击收藏按钮添加</span>' +
     '</div>';
 }

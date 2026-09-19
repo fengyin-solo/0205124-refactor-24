@@ -237,3 +237,106 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!e.target.closest('.user-dropdown')) document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
     });
 });
+
+/* ========== 互动（收藏 / 点赞）共用处理 ========== */
+
+/**
+ * 各内容类型的统一登记：新增一种可互动内容时只需在此补一条配置。
+ * interactionApi 给出该类型在每种互动上的后端路径，
+ * detailApi/detailPage 供个人中心（我的收藏）等列表展示使用。
+ */
+const TARGET_TYPES = {
+    SPOT: {
+        label: '景点',
+        detailApi: '/api/spot/detail?id=',
+        detailPage: 'spot-detail.html?id=',
+        emptyIcon: 'fa-mountain',
+        interactionApi: {
+            favorite: {
+                check: id => `/api/favorite/check?targetType=SPOT&targetId=${id}`,
+                add: id => `/api/favorite/add?targetType=SPOT&targetId=${id}`,
+                remove: id => `/api/favorite/remove?targetType=SPOT&targetId=${id}`
+            }
+        }
+    },
+    ROUTE: {
+        label: '线路',
+        detailApi: '/api/route/detail?id=',
+        detailPage: 'route-detail.html?id=',
+        emptyIcon: 'fa-route',
+        interactionApi: {
+            favorite: {
+                check: id => `/api/favorite/check?targetType=ROUTE&targetId=${id}`,
+                add: id => `/api/favorite/add?targetType=ROUTE&targetId=${id}`,
+                remove: id => `/api/favorite/remove?targetType=ROUTE&targetId=${id}`
+            }
+        }
+    },
+    CULTURE: {
+        label: '红色文化',
+        detailApi: '/api/culture/detail?id=',
+        detailPage: 'culture-detail.html?id=',
+        emptyIcon: 'fa-book-open',
+        interactionApi: {
+            favorite: {
+                check: id => `/api/favorite/check?targetType=CULTURE&targetId=${id}`,
+                add: id => `/api/favorite/add?targetType=CULTURE&targetId=${id}`,
+                remove: id => `/api/favorite/remove?targetType=CULTURE&targetId=${id}`
+            },
+            like: {
+                check: id => `/api/like/check?targetType=CULTURE&targetId=${id}`,
+                add: id => `/api/like/add?targetType=CULTURE&targetId=${id}`,
+                remove: id => `/api/like/remove?targetType=CULTURE&targetId=${id}`
+            }
+        }
+    },
+    HOTEL: {
+        label: '酒店',
+        detailApi: '/api/hotel/detail?id=',
+        detailPage: 'hotel-detail.html?id=',
+        emptyIcon: 'fa-hotel',
+        interactionApi: {}
+    }
+};
+
+/**
+ * 收拢详情页收藏 / 点赞的重复处理：登录检查、已操作状态查询、
+ * 新增/取消切换、提示语全部走同一份流程，页面只需提供按钮如何渲染。
+ *
+ * @param {Object} opts
+ * @param {string} opts.kind            互动种类：'favorite' | 'like'
+ * @param {string} opts.targetType      内容类型，对应 TARGET_TYPES 的 key
+ * @param {string|number} opts.targetId 内容ID
+ * @param {string} opts.buttonId        按钮元素ID
+ * @param {(active:boolean, btn:HTMLElement)=>void} opts.render 各页面保留的按钮渲染差异
+ * @param {(active:boolean)=>void} [opts.onChange] 状态变化后的额外回调（如刷新点赞数）
+ * @returns {{active:boolean, toggle:Function, refresh:Function}}
+ */
+function bindInteractionToggle(opts) {
+    const state = { active: false };
+    const btn = document.getElementById(opts.buttonId);
+    const apiSet = TARGET_TYPES[opts.targetType].interactionApi[opts.kind];
+    const actionLabel = opts.kind === 'like' ? '点赞' : '收藏';
+
+    function paint() { opts.render(state.active, btn); }
+
+    async function refresh() {
+        if (!getUser()) return;
+        const res = await api(apiSet.check(opts.targetId));
+        if (res) { state.active = true; paint(); }
+    }
+
+    async function toggle() {
+        if (!requireLogin()) return;
+        const res = await api((state.active ? apiSet.remove : apiSet.add)(opts.targetId));
+        if (res === null) return;
+        state.active = !state.active;
+        showToast(state.active ? ('已' + actionLabel) : ('已取消' + actionLabel));
+        paint();
+        if (opts.onChange) opts.onChange(state.active);
+    }
+
+    paint();
+    refresh();
+    return { state, toggle, refresh };
+}

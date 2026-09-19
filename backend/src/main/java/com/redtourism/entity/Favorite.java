@@ -1,13 +1,14 @@
 package com.redtourism.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.redtourism.interaction.UserInteractionRecord;
 import lombok.Data;
 import java.io.Serializable;
 import java.util.Date;
 
 @Data
 @TableName("favorite")
-public class Favorite implements Serializable {
+public class Favorite implements UserInteractionRecord, Serializable {
     private static final long serialVersionUID = 1L;
 
     @TableId(type = IdType.AUTO)

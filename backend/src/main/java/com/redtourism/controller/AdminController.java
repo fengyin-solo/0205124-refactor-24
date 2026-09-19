@@ -503,7 +503,7 @@ public class AdminController {
 
     @GetMapping("/comment/delete")
     public Result<String> deleteComment(@RequestParam Long id) {
-        interactionService.deleteComment(id);
+        interactionService.deleteComment(id, null);
         return Result.success("删除成功", null);
     }
 

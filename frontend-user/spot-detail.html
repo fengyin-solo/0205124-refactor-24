@@ -277,7 +277,19 @@
 <script src="js/common.js"></script>
 <script>
 const spotId = getParam('id');
-let isFavorited = false;
+// 收藏按钮的状态查询与新增/取消统一走 bindInteractionToggle，本页只保留按钮样式差异
+const favoriteToggle = bindInteractionToggle({
+    kind: 'favorite',
+    targetType: 'SPOT',
+    targetId: spotId,
+    buttonId: 'favBtn',
+    render: (active, btn) => {
+        btn.innerHTML = active ? '<i class="fas fa-heart"></i> 已收藏' : '<i class="far fa-heart"></i> 收藏';
+        btn.classList.toggle('btn-outline', !active);
+        btn.classList.toggle('btn-primary', active);
+    }
+});
+function toggleFavorite() { favoriteToggle.toggle(); }
 let selectedRating = 5;
 let commentPage = 1;
 let spotData = null, lastOrderId = null, payMethod = 'WECHAT';
@@ -417,45 +429,6 @@ async function loadGallery() {
     gallery.innerHTML = images.map(img => `<img src="${API + (img.url || img.imageUrl || img)}" alt="景点图片" onerror="imgError(this)">`).join('');
 }
 
-async function checkFavorite() {
-    const user = getUser();
-    if (!user) return;
-    const res = await api(`/api/favorite/check?targetType=SPOT&targetId=${spotId}`);
-    if (res) {
-        isFavorited = true;
-        updateFavBtn();
-    }
-}
-
-function updateFavBtn() {
-    const btn = document.getElementById('favBtn');
-    if (isFavorited) {
-        btn.innerHTML = '<i class="fas fa-heart"></i> 已收藏';
-        btn.classList.remove('btn-outline');
-        btn.classList.add('btn-primary');
-    } else {
-        btn.innerHTML = '<i class="far fa-heart"></i> 收藏';
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-outline');
-    }
-}
-
-async function toggleFavorite() {
-    if (!requireLogin()) return;
-    if (isFavorited) {
-        var res = await api(`/api/favorite/remove?targetType=SPOT&targetId=${spotId}`);
-        if (res === null) return;
-        isFavorited = false;
-        showToast('已取消收藏');
-    } else {
-        var res = await api(`/api/favorite/add?targetType=SPOT&targetId=${spotId}`);
-        if (res === null) return;
-        isFavorited = true;
-        showToast('已收藏');
-    }
-    updateFavBtn();
-}
-
 async function loadRelated() {
     const list = await api(`/api/spot/related?id=${spotId}`);
     const container = document.getElementById('relatedSpots');
@@ -560,7 +533,6 @@ async function submitSuggestion() {
 selectStar(5);
 loadDetail();
 loadGallery();
-checkFavorite();
 loadRelated();
 loadComments(1);
 </script>

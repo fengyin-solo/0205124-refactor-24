@@ -12,7 +12,14 @@ public interface InteractionService {
     IPage<Comment> listAllComments(int page, int size, String keyword);
     Comment getCommentById(Long id);
     boolean replyComment(Long commentId, String replyContent, Long adminId);
-    boolean deleteComment(Long id);
+
+    /**
+     * 删除留言。
+     * @param id       留言ID
+     * @param operatorId 操作人用户ID；为 null 表示管理员后台操作（不限归属），
+     *                   非 null 时仅允许删除本人的留言
+     */
+    boolean deleteComment(Long id, Long operatorId);
 
     boolean addFavorite(Long userId, String targetType, Long targetId);
     boolean removeFavorite(Long userId, String targetType, Long targetId);

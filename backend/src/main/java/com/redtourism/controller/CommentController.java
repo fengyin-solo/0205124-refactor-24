@@ -50,7 +50,7 @@ public class CommentController {
     public Result<String> delete(@RequestParam Long id, HttpSession session) {
         User user = (User) session.getAttribute(Constants.SESSION_USER);
         if (user == null) return Result.error(401, "请先登录");
-        interactionService.deleteComment(id);
+        interactionService.deleteComment(id, user.getId());
         return Result.success("删除成功", null);
     }
 }
